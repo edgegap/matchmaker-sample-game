@@ -11,21 +11,37 @@ public class MatchmakerUI : MonoBehaviour
 {
     public GameObject onlineUI;
     public GameObject offlineUI;
-
     public Button createBtn;
     public Button deleteBtn;
     public Button exitMatchBtn;
 
-    public TMP_InputField gameModeField;
-
     private MatchmakerManager _matchmaker;
-
     private Ticket currentTicket;
 
+    public List<Toggle> modeToggles;
     private bool isOnline = false;
     private bool isWaiting = true;
     private bool isReady = false;
     private float waitingTimeSec = 5;
+    private string mode = "mode.casual";
+
+    public void ToggleValueChanged(Toggle toggle)
+    {
+        if (toggle.isOn)
+        {
+            string value = toggle.gameObject.GetComponentInChildren<TextMeshProUGUI>().text;
+            mode = value;
+            Debug.Log($"Changed mode to {value};");
+        }
+    }
+
+    public void changeTogglesInteractState(bool state)
+    {
+        foreach (Toggle t in modeToggles)
+        {
+            t.interactable = state;
+        }
+    }
 
     // Start is called before the first frame update
     void Start()
@@ -35,6 +51,15 @@ public class MatchmakerUI : MonoBehaviour
         createBtn.onClick.AddListener(CreateTicketClick);
         deleteBtn.onClick.AddListener(DeleteTicketClick);
         exitMatchBtn.onClick.AddListener(DisconnectMatch);
+
+        foreach (Toggle t in modeToggles)
+        {
+            ToggleValueChanged(t);
+
+            t.onValueChanged.AddListener(delegate {
+                ToggleValueChanged(t);
+            });
+        }
     }
 
     // Update is called once per frame
@@ -50,27 +75,8 @@ public class MatchmakerUI : MonoBehaviour
             onlineUI.SetActive(false);
             offlineUI.SetActive(true);
 
-            if (currentTicket is null)
+            if (currentTicket is not null)
             {
-                deleteBtn.interactable = false;
-
-                if (string.IsNullOrEmpty(gameModeField.text))
-                {
-                    createBtn.interactable = false;
-                }
-                else
-                {
-                    createBtn.interactable = true;
-                }
-
-                gameModeField.interactable = true;
-            }
-            else
-            {
-                deleteBtn.interactable = true;
-                createBtn.interactable = false;
-                gameModeField.interactable = false;
-
                 if (currentTicket.assignment is not null && !isReady)
                 {
                     isReady = true;
@@ -90,15 +96,20 @@ public class MatchmakerUI : MonoBehaviour
     {
         try
         {
-            Debug.Log("create");
-            string mode = gameModeField.text;
+            createBtn.interactable = false;
+            changeTogglesInteractState(false);
+
             currentTicket = await _matchmaker.CreateTicket(mode);
             isWaiting = false;
+            deleteBtn.interactable = true;
         }
         catch (HttpRequestException httpEx)
         {
             Debug.Log($"Request failed;\n{httpEx.InnerException}");
             currentTicket = null;
+            createBtn.interactable = true;
+            deleteBtn.interactable = false;
+            changeTogglesInteractState(true);
         }
     }
 
@@ -106,6 +117,7 @@ public class MatchmakerUI : MonoBehaviour
     {
         try
         {
+            deleteBtn.interactable = false;
             await _matchmaker.DeleteTicket(currentTicket.id);
         }
         catch(HttpRequestException httpEx)
@@ -115,6 +127,8 @@ public class MatchmakerUI : MonoBehaviour
         finally
         {
             currentTicket = null;
+            createBtn.interactable = true;
+            changeTogglesInteractState(true);
         }
     }
 
@@ -144,6 +158,9 @@ public class MatchmakerUI : MonoBehaviour
         currentTicket = null;
         isWaiting = true;
         isReady = false;
+        deleteBtn.interactable = false;
+        createBtn.interactable = true;
+        changeTogglesInteractState(true);
     }
 
     public async void RefreshTicket()
